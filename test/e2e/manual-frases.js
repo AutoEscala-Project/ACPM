@@ -21,7 +21,9 @@ const ANTIGAS = {
   // O 7º voo local não fica mais indisponível: o app avisa e pede a confirmação (F1c). D2: a tela é Pedidos (lista e
   // detalhe, por estado), sem a coluna Situação; importa-se só o aprovado
   pedidos: ['o horário fica indisponível, e o app diz o próximo horário possível', 'Ainda não importado', 'a coluna Situação', 'Importar pedidos da agenda',
-    'Importar da agenda'],
+    'Importar da agenda',
+    // E: a importação também tira os cancelados (a conciliação), e o voo do cancelado não se tira mais no Voa
+    'só acrescenta, nunca apaga nem repete', 'o aviso diz para tirá-lo no Voa'],
   // O peso vem antes do curso em Alunos; Alunos é lista e detalhe (F2): sem as colunas de Instrutores, sem o cartão no
   // celular, os dados pessoais na seção do aluno (o painel fica para os instrutores)
   // A: sem o link para a Demanda (os voos da data ficam em "Nesta data"), e a secretaria não altera os dados pessoais
@@ -63,7 +65,9 @@ const NOVAS = {
     'O pedido aprovado da data aberta entra na demanda na hora quando a escala dessa data já está gravada', 'Importar os põe lá',
     'O pedido escolhido é só de leitura', 'Registrar de novo…', '2ª preferência é outro horário exato',
     'Registrar e aprovar', 'Registrar sem aprovar', 'Com Registrar na lista de espera',
-    'Com Registrar mesmo assim, o pedido guarda quem confirmou e quando'],
+    'Com Registrar mesmo assim, o pedido guarda quem confirmou e quando',
+    // E: o cancelado sai pela conciliação, e a vaga vai ao 1º da lista de espera
+    'continua na demanda até Tirar da escala', 'dá a vaga ao 1º da lista de espera daquele horário'],
   // A busca sem acentos, quantos aparecem e o "Limpar filtros"; a coluna Vem (a data aberta não é sempre hoje); o filtro
   // das habilitações, com várias marcas e a regra ("todas as marcadas")
   instrutores: ['Editar habilitações', 'sem os acentos', '12 de 40 instrutores', 'Limpar filtros', 'o interruptor Vem', 'Filtro das habilitações',

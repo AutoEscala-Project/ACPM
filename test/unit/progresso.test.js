@@ -544,15 +544,15 @@ describe('O Noturno em trechos: TSL-01, NOT e TSL-02 num voo só', () => {
 
   it('na agenda: o pedido Noturno entra como a noite do programa (a etapa NOT), nunca como um translado', () => {
     const solicitacao = (id, missao) => ({ id, data: '2026-11-11', aluno: ALUNO, aluno_nome: 'Aluno 1000', missao, janela: 'noite', horario: null, cancelada_em: null });
-    const importar = (situacao, missoes) => {
+    const importados = (situacao, missoes) => {
       const estado = { nid: 2000, importadas: [], stu: [alunoDoCenario(ALUNO, { fly: false }, { curso: 'PP' })] };
       importar(estado, missoes.map((m, i) => solicitacao(70 + i, m)), { situacao, programa: [curso()] });
       return [estado.stu[0], ...estado.stu[0].extra].map(p => [p.mis, p.etapa, p.eq, p.nb, p.p1]);
     };
     const ate4 = ['TMA-01', 'TMA-02'].map(c => reg(c));
-    assert.deepEqual(importar(ate4, ['Noturno', 'Navegação']), [['Noturno', 'NOT', 'C172', 4, 1050], ['Navegação', 'NAV-01', 'C152', 1.5, 500]]);
+    assert.deepEqual(importados(ate4, ['Noturno', 'Navegação']), [['Noturno', 'NOT', 'C172', 4, 1050], ['Navegação', 'NAV-01', 'C152', 1.5, 500]]);
     // Antes da Fase 4, o Noturno é fora da ordem: o pedido entra sem a missão do curso
-    assert.deepEqual(importar([], ['Noturno']).map(p => p.slice(0, 2)), [['Noturno', undefined]]);
+    assert.deepEqual(importados([], ['Noturno']).map(p => p.slice(0, 2)), [['Noturno', undefined]]);
   });
 });
 

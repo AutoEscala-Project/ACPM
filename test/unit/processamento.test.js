@@ -4,7 +4,7 @@
 import { describe, it, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { conciliarPedidos, aplicarConciliacao, resumoDaConciliacao, ficaNaEscala, missaoDaEntrada, minutosDoPedido } from '../../js/processamento.js';
-import { importar } from '../helpers/importar.js';
+import { importar as importarPedidos } from '../helpers/importar.js';
 import { fixosAoAprovar } from '../../js/fixos.js';
 import { normalizarCursos } from '../../js/cursos.js';
 import { programaDoLegado, percursoDoCurso, novoCurso } from '../../js/programa.js';
@@ -28,8 +28,8 @@ describe('Importar as solicitações da agenda para a demanda', () => {
 
   it('aluno sem voo no dia: o pedido vira a missão principal', () => {
     const e = estado();
-    const resumo = importar(e, [pedido(1, 1000)]);
-    assert.deepEqual(resumo, { novos: 1, atualizados: 0, semAluno: 0, deInativo: 0, foraDoPrograma: [], semMissaoDoCurso: [], esperamOsProgramas: 0, foraDaLista: [], semOHorario: [] });
+    const resumo = importarPedidos(e, [pedido(1, 1000)]);
+    assert.deepEqual(resumo, { novos: 1, atualizados: 0, semAluno: 0, deInativo: 0, foraDoPrograma: [], semMissaoDoCurso: [], esperamOsProgramas: 0, foraDaLista: [], semOHorario: [], sairam: [], conferir: [] });
     assert.deepEqual([e.stu[0].fly, e.stu[0].mis, e.stu[0].jan, e.stu[0].p1], [true, 'Voo Local', 'h760', 760]);
     assert.deepEqual(e.importadas, [1]);
   });
@@ -39,18 +39,18 @@ describe('Importar as solicitações da agenda para a demanda', () => {
   it('o 7º voo local confirmado entra com limiteConfirmado; o voo que dá lugar ao pedido perde o de antes', () => {
     const e = estado();
     const confirmado = { janela: 'horario', horario: '08:20', limite_confirmado_por: 'Maria', limite_confirmado_em: '2026-11-10T14:00:00.000Z' };
-    importar(e, [pedido(1, 1000, confirmado), pedido(2, 1001)]);
+    importarPedidos(e, [pedido(1, 1000, confirmado), pedido(2, 1001)]);
     assert.deepEqual([e.stu[0].limiteConfirmado, e.stu[0].jan], [true, 'h500']);
     assert.equal(Object.hasOwn(e.stu[1].extra[0], 'limiteConfirmado'), false);
     const outro = estado();
     outro.stu[2].limiteConfirmado = true;
-    importar(outro, [pedido(3, 1002, { janela: 'horario', horario: '10:10' })]);
+    importarPedidos(outro, [pedido(3, 1002, { janela: 'horario', horario: '10:10' })]);
     assert.deepEqual([outro.stu[2].solicitacao, Object.hasOwn(outro.stu[2], 'limiteConfirmado')], [3, false]);
   });
 
   it('aluno já voando outra missão: o pedido entra como missão extra', () => {
     const e = estado();
-    importar(e, [pedido(2, 1001)]);
+    importarPedidos(e, [pedido(2, 1001)]);
     assert.equal(e.stu[1].mis, 'IFR', 'a missão que ele já tinha continua');
     // A missão extra é numerada no aluno: o número do cadastro (nid) não muda
     assert.deepEqual(e.stu[1].extra.map(x => [x.mid, x.mis, x.jan]), [[1, 'Voo Local', 'h760']]);
@@ -59,16 +59,16 @@ describe('Importar as solicitações da agenda para a demanda', () => {
 
   it('aluno já voando a mesma missão (copiada da data anterior, sem pedido da agenda): o pedido toma o lugar dela', () => {
     const e = estado();
-    const resumo = importar(e, [pedido(3, 1002)]);
-    assert.deepEqual(resumo, { novos: 0, atualizados: 1, semAluno: 0, deInativo: 0, foraDoPrograma: [], semMissaoDoCurso: [], esperamOsProgramas: 0, foraDaLista: [], semOHorario: [] });
+    const resumo = importarPedidos(e, [pedido(3, 1002)]);
+    assert.deepEqual(resumo, { novos: 0, atualizados: 1, semAluno: 0, deInativo: 0, foraDoPrograma: [], semMissaoDoCurso: [], esperamOsProgramas: 0, foraDaLista: [], semOHorario: [], sairam: [], conferir: [] });
     assert.deepEqual([e.stu[2].jan, e.stu[2].p1, e.stu[2].solicitacao, e.stu[2].extra], ['h760', 760, 3, []]);
   });
 
   it('dois pedidos da mesma missão para o mesmo aluno: dois voos, cada um no seu horário', () => {
     const e = estado();
     const pedidos = [pedido(10, 1002, { janela: 'horario', horario: '10:10' }), pedido(11, 1002, { janela: 'horario', horario: '14:30' })];
-    const resumo = importar(e, pedidos);
-    assert.deepEqual(resumo, { novos: 1, atualizados: 1, semAluno: 0, deInativo: 0, foraDoPrograma: [], semMissaoDoCurso: [], esperamOsProgramas: 0, foraDaLista: [], semOHorario: [] });
+    const resumo = importarPedidos(e, pedidos);
+    assert.deepEqual(resumo, { novos: 1, atualizados: 1, semAluno: 0, deInativo: 0, foraDoPrograma: [], semMissaoDoCurso: [], esperamOsProgramas: 0, foraDaLista: [], semOHorario: [], sairam: [], conferir: [] });
     const voos = [e.stu[2], ...e.stu[2].extra];
     assert.deepEqual(voos.map(v => [v.mis, v.jan, v.solicitacao, v.fly]), [['Voo Local', 'h610', 10, true], ['Voo Local', 'h870', 11, true]]);
   });
@@ -77,15 +77,15 @@ describe('Importar as solicitações da agenda para a demanda', () => {
     const programa = { PP: [{ id: 'PP-01', nome: 'A', mis: 'Voo Local', eq: 'C152', nb: 1 }, { id: 'PP-02', nome: 'B', mis: 'Navegação', eq: 'C172', nb: 2 }], PC: [], INVA: [] };
     const e = { ...estado(), stu: [aluno(1000, { fly: false }, { curso: 'PP' }), aluno(1001, { fly: false }, { curso: 'PP' })] };
     const situacao = [{ aluno: 1000, curso: 'PP', missao: 'PP-01', resultado: 'aprovado' }];
-    importar(e, [pedido(7, 1000, { missao: 'Navegação' }), pedido(8, 1001, { missao: 'Navegação' })], { situacao, programa: doCadastro(programa) });
+    importarPedidos(e, [pedido(7, 1000, { missao: 'Navegação' }), pedido(8, 1001, { missao: 'Navegação' })], { situacao, programa: doCadastro(programa) });
     assert.deepEqual([e.stu[0].etapa, e.stu[0].eq, e.stu[0].nb], ['PP-02', 'C172', 2]);
     assert.deepEqual([e.stu[1].etapa, e.stu[1].mis], [undefined, 'Navegação'], 'a próxima do 1001 é PP-01 (Voo Local): o pedido entra como veio');
   });
 
   it('ignora cancelados e os já importados; conta os alunos que não estão no cadastro', () => {
     const e = { ...estado(), importadas: [5] };
-    const resumo = importar(e, [pedido(4, 1000, { cancelada_em: '2026-11-10T13:00:00Z' }), pedido(5, 1000), pedido(6, 9999)]);
-    assert.deepEqual(resumo, { novos: 0, atualizados: 0, semAluno: 1, deInativo: 0, foraDoPrograma: [], semMissaoDoCurso: [], esperamOsProgramas: 0, foraDaLista: [], semOHorario: [] });
+    const resumo = importarPedidos(e, [pedido(4, 1000, { cancelada_em: '2026-11-10T13:00:00Z' }), pedido(5, 1000), pedido(6, 9999)]);
+    assert.deepEqual(resumo, { novos: 0, atualizados: 0, semAluno: 1, deInativo: 0, foraDoPrograma: [], semMissaoDoCurso: [], esperamOsProgramas: 0, foraDaLista: [], semOHorario: [], sairam: [], conferir: [] });
     assert.equal(e.stu[0].fly, false);
     // O pedido de quem não está no cadastro não conta como visto (entra quando o aluno for cadastrado)
     assert.deepEqual(e.importadas, [5]);
@@ -95,14 +95,14 @@ describe('Importar as solicitações da agenda para a demanda', () => {
   it('a duração do pedido vai para a demanda (vale mais que as horas do programa do curso)', () => {
     const programa = { PP: [{ id: 'PP-01', nome: 'A', mis: 'Voo Local', eq: 'C152', nb: 2 }], PC: [], INVA: [] };
     const e = { ...estado(), stu: [aluno(1000, { fly: false }, { curso: 'PP' }), aluno(1001, { fly: false }, { curso: 'PP' })] };
-    importar(e, [pedido(20, 1000, { janela: 'horario', horario: '10:10', horas: 2.6 }), pedido(21, 1001, { janela: 'horario', horario: '10:10', horas: null })], { programa: doCadastro(programa) });
+    importarPedidos(e, [pedido(20, 1000, { janela: 'horario', horario: '10:10', horas: 2.6 }), pedido(21, 1001, { janela: 'horario', horario: '10:10', horas: null })], { programa: doCadastro(programa) });
     assert.deepEqual([e.stu[0].nb, e.stu[0].etapa, e.stu[1].nb, e.stu[1].etapa], [2.6, 'PP-01', 2, 'PP-01']);
   });
 
   it('missão do curso noutro recurso: as preferências são os horários desse recurso, no horário pedido (o exato: as duas nele)', () => {
     const programa = { PP: [], PC: [{ id: 'PC-01', nome: 'A', mis: 'IFR', eq: 'PA-34', nb: 1 }], INVA: [] };
     const e = { ...estado(), stu: [aluno(1000, { fly: false }, { curso: 'PC' })] };
-    importar(e, [pedido(9, 1000, { missao: 'IFR', janela: 'horario', horario: '06:30' })], { programa: doCadastro(programa) });
+    importarPedidos(e, [pedido(9, 1000, { missao: 'IFR', janela: 'horario', horario: '06:30' })], { programa: doCadastro(programa) });
     assert.deepEqual([e.stu[0].etapa, e.stu[0].eq, e.stu[0].p1, e.stu[0].p2], ['PC-01', 'PA-34', 390, 390]);
   });
 
@@ -110,7 +110,7 @@ describe('Importar as solicitações da agenda para a demanda', () => {
   it('o pedido com recurso entra com ele; sem ele, ou com um que a missão não permite, com o padrão da missão', () => {
     const e = { ...estado(), stu: [aluno(1000, { fly: false }), aluno(1001, { fly: false }), aluno(1002, { fly: false })] };
     const nav = (id, quem, recurso) => pedido(id, quem, { missao: 'Navegação', janela: 'horario', horario: '07:30', horas: 2, ...(recurso === undefined ? {} : { recurso }) });
-    importar(e, [nav(50, 1000, 'PA-34'), nav(51, 1001), nav(52, 1002, 'Sim. Multi')]);
+    importarPedidos(e, [nav(50, 1000, 'PA-34'), nav(51, 1001), nav(52, 1002, 'Sim. Multi')]);
     assert.deepEqual(e.stu.map(s => [s.eq, s.p1, s.jan, s.nb]), [['PA-34', 450, 'h450', 2], ['C152', 500, 'h450', 2], ['C152', 500, 'h450', 2]]);
     for (const s of e.stu) assert.equal(Object.hasOwn(s, 'recurso'), false, 'o pedido da demanda não ganha o campo');
   });
@@ -121,7 +121,7 @@ describe('Importar as solicitações da agenda para a demanda', () => {
     }).map(c => ({ ...c, missoes: c.missoes.map(m => ({ ...m, regra: 'livre' })) }));
     const importar = recurso => {
       const e = { ...estado(), stu: [aluno(1000, { fly: false }, { curso: 'PP' })] };
-      importar(e, [pedido(53, 1000, { missao: 'Navegação', janela: 'horario', horario: '06:30', ...(recurso === undefined ? {} : { recurso }) })], { programa });
+      importarPedidos(e, [pedido(53, 1000, { missao: 'Navegação', janela: 'horario', horario: '06:30', ...(recurso === undefined ? {} : { recurso }) })], { programa });
       return [e.stu[0].etapa, e.stu[0].eq, e.stu[0].nb];
     };
     assert.deepEqual(importar(undefined), ['NAV-01', 'C152', 1.5]);
@@ -134,7 +134,7 @@ describe('Importar as solicitações da agenda para a demanda', () => {
 
   it('a missão do curso que o operador pôs no voo continua com o recurso dela, qualquer que seja o do pedido', () => {
     const e = { ...estado(), stu: [aluno(1000, { mis: 'Navegação', eq: 'C172', nb: 2, etapa: 'NAV-02', cursoDaEtapa: 'PP' }, { curso: 'PP' })] };
-    importar(e, [pedido(54, 1000, { missao: 'Navegação', janela: 'horario', horario: '06:30', recurso: 'PA-34' })]);
+    importarPedidos(e, [pedido(54, 1000, { missao: 'Navegação', janela: 'horario', horario: '06:30', recurso: 'PA-34' })]);
     assert.deepEqual([e.stu[0].etapa, e.stu[0].eq, e.stu[0].nb], ['NAV-02', 'C172', 2]);
   });
 
@@ -146,7 +146,7 @@ describe('Importar as solicitações da agenda para a demanda', () => {
     const PP = cursoPP();
     const situacao = percursoDoCurso(PP).missoes.slice(0, 13).map((m, i) => ({ id: i + 1, aluno: 1000, curso: 'PP', missao: m.codigo, resultado: 'aprovado' }));
     const e = { ...estado(), stu: [aluno(1000, { fly: false }, { curso: 'PP' })] };
-    importar(e, [pedido(30, 1000, { missao: 'Parafuso' }), pedido(31, 1000, { missao: 'Navegação' }), pedido(32, 1000, { missao: 'Noturno' }),
+    importarPedidos(e, [pedido(30, 1000, { missao: 'Parafuso' }), pedido(31, 1000, { missao: 'Navegação' }), pedido(32, 1000, { missao: 'Noturno' }),
       pedido(33, 1000, { missao: 'Simulador' }), pedido(39, 1000, { missao: 'Voo Solo' })], { situacao, programa: [PP] });
     assert.deepEqual([e.stu[0], ...e.stu[0].extra].map(p => [p.mis, p.etapa, p.eq, p.nb]), [
       ['Parafuso', 'PE-04', 'C152', 1], ['Navegação', 'NAV-01', 'C152', 1.5], ['Noturno', 'NOT', 'C172', 4], ['Simulador', undefined, 'Sim. Mono', 2],
@@ -161,7 +161,7 @@ describe('Importar as solicitações da agenda para a demanda', () => {
     const PP = cursoPP();
     const situacao = percursoDoCurso(PP).missoes.slice(0, 13).map((m, i) => ({ id: i + 1, aluno: 1000, curso: 'PP', missao: m.codigo, resultado: 'aprovado' }));
     const e = { ...estado(), stu: [aluno(1000, { fly: false }, { curso: 'PP' }), aluno(1001, { fly: false })] };
-    importar(e, [pedido(34, 1000, { missao: 'Parafuso' }), pedido(35, 1000, { missao: 'Simulador' }), pedido(36, 1001)], { situacao, programa: [PP] });
+    importarPedidos(e, [pedido(34, 1000, { missao: 'Parafuso' }), pedido(35, 1000, { missao: 'Simulador' }), pedido(36, 1001)], { situacao, programa: [PP] });
     assert.deepEqual([e.stu[0], ...e.stu[0].extra, e.stu[1]].map(p => [p.mis, p.etapa, p.cursoDaEtapa]),
       [['Parafuso', 'PE-04', 'PP'], ['Simulador', undefined, undefined], ['Voo Local', undefined, undefined]]);
     assert.equal(Object.hasOwn(e.stu[0].extra[0], 'cursoDaEtapa'), false);
@@ -174,20 +174,20 @@ describe('Importar as solicitações da agenda para a demanda', () => {
     const PP = cursoPP();
     const situacao = percursoDoCurso(PP).missoes.slice(0, 13).map((m, i) => ({ id: i + 1, aluno: 1000, curso: 'PP', missao: m.codigo, resultado: 'aprovado' }));
     const e = { ...estado(), stu: [aluno(1000, { mis: 'Navegação', eq: 'C152', nb: 1.5, etapa: 'NAV-02', cursoDaEtapa: 'PP', insId: 2 }, { curso: 'PC' })] };
-    const resumo = importar(e, [pedido(37, 1000, { missao: 'Navegação', janela: 'horario', horario: '06:30' })], { situacao, programa: [PP] });
-    assert.deepEqual(resumo, { novos: 0, atualizados: 1, semAluno: 0, deInativo: 0, foraDoPrograma: [], semMissaoDoCurso: [], esperamOsProgramas: 0, foraDaLista: [], semOHorario: [] });
+    const resumo = importarPedidos(e, [pedido(37, 1000, { missao: 'Navegação', janela: 'horario', horario: '06:30' })], { situacao, programa: [PP] });
+    assert.deepEqual(resumo, { novos: 0, atualizados: 1, semAluno: 0, deInativo: 0, foraDoPrograma: [], semMissaoDoCurso: [], esperamOsProgramas: 0, foraDaLista: [], semOHorario: [], sairam: [], conferir: [] });
     const p = e.stu[0];
     assert.deepEqual([p.etapa, p.cursoDaEtapa, p.eq, p.nb, p.solicitacao, p.jan, p.insId, p.extra], ['NAV-02', 'PP', 'C152', 1.5, 37, 'h390', 2, []]);
     // Sem os programas lidos, a escolha também continua (ela não é inferida); a duração registrada na agenda vale mais
     const semPrograma = { ...estado(), stu: [aluno(1000, { mis: 'Navegação', eq: 'C172', nb: 2, etapa: 'TSL-01' }, { curso: 'PP' })] };
-    importar(semPrograma, [pedido(38, 1000, { missao: 'Navegação', horas: 1.2 })], { programa: [] });
+    importarPedidos(semPrograma, [pedido(38, 1000, { missao: 'Navegação', horas: 1.2 })], { programa: [] });
     const q = semPrograma.stu[0];
     assert.deepEqual([q.etapa, Object.hasOwn(q, 'cursoDaEtapa'), q.eq, q.nb, q.solicitacao], ['TSL-01', false, 'C172', 1.2, 38]);
   });
 
   it('sem programa (os resultados ou os programas não foram lidos), nenhum pedido entra como missão do curso', () => {
     const e = { ...estado(), stu: [aluno(1000, { fly: false }, { curso: 'PP' })] };
-    importar(e, [pedido(40, 1000)], { programa: [] });
+    importarPedidos(e, [pedido(40, 1000)], { programa: [] });
     assert.deepEqual([e.stu[0].fly, e.stu[0].etapa], [true, undefined]);
   });
 
@@ -196,7 +196,7 @@ describe('Importar as solicitações da agenda para a demanda', () => {
     const programa = { PP: [{ id: 'PP-01', nome: 'A', mis: 'Voo Local', eq: 'C152', nb: 1 }, { id: 'PP-02', nome: 'B', mis: 'Navegação', eq: 'C152', nb: 2 }] };
     const importar = fStatus => {
       const e = { ...estado(), fStatus, stu: [aluno(1000, { etapa: 'PP-01' }, { curso: 'PP' })] };
-      importar(e, [pedido(50, 1000, { missao: 'Navegação' })], { programa: doCadastro(programa) });
+      importarPedidos(e, [pedido(50, 1000, { missao: 'Navegação' })], { programa: doCadastro(programa) });
       return e.stu[0].extra.map(x => [x.mis, x.etapa]);
     };
     assert.deepEqual(importar({}), [['Navegação', 'PP-02']]);
@@ -210,8 +210,8 @@ describe('Importar as solicitações da agenda para a demanda', () => {
     const e = cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { p1: 610, p2: -1, etapa: 'PP-07' })] });
     const o = runAllocationEngine(e).out[0];
     e.fixos = { '1000_0_1': { a: o.a, b: o.b, r: o.r, insId: o.insId, agendado: true } };
-    const resumo = importar(e, [pedido(7, 1000, { janela: 'horario', horario: '13:40', horas: 2 })]);
-    assert.deepEqual(resumo, { novos: 1, atualizados: 0, semAluno: 0, deInativo: 0, foraDoPrograma: [], semMissaoDoCurso: [], esperamOsProgramas: 0, foraDaLista: [], semOHorario: [] });
+    const resumo = importarPedidos(e, [pedido(7, 1000, { janela: 'horario', horario: '13:40', horas: 2 })]);
+    assert.deepEqual(resumo, { novos: 1, atualizados: 0, semAluno: 0, deInativo: 0, foraDoPrograma: [], semMissaoDoCurso: [], esperamOsProgramas: 0, foraDaLista: [], semOHorario: [], sairam: [], conferir: [] });
     const principal = e.stu[0], [extra] = principal.extra;
     assert.deepEqual([principal.p1, principal.nb, principal.etapa, principal.solicitacao], [610, 1, 'PP-07', undefined]);
     assert.deepEqual([extra.mid, extra.mis, extra.p1, extra.nb, extra.solicitacao], [1, 'Voo Local', 820, 2, 7]);
@@ -226,7 +226,7 @@ describe('Importar as solicitações da agenda para a demanda', () => {
     for (const marca of [{ agendado: true }, { escolhido: true }]) {
       const e = { ...estado(), stu: [aluno(1000, { p1: 610, p2: -1, insId: 2 })], fixos: { '1000_0_1': { a: 610, b: 670, r: 'PP-LJV', insId: 2, ...marca } } };
       const antes = structuredClone(e.stu[0]);
-      importar(e, [pedido(90, 1000, { janela: 'horario', horario: '08:20' })]);
+      importarPedidos(e, [pedido(90, 1000, { janela: 'horario', horario: '08:20' })]);
       const { extra, ...principal } = e.stu[0];
       assert.deepEqual(principal, (({ extra: _, ...r }) => r)(antes), JSON.stringify(marca));
       assert.deepEqual(extra.map(x => [x.mid, x.solicitacao, x.jan]), [[1, 90, 'h500']]);
@@ -236,7 +236,7 @@ describe('Importar as solicitações da agenda para a demanda', () => {
     const editado = { mis: 'Voo Local', eq: 'C172', p1: 700, p2: -1, jan: 'h700', insId: 3, solicitacao: 91 };
     for (const fly of [true, false]) {
       const e = { ...estado(), stu: [aluno(1000, { ...editado, fly })], fixos: { '1000_0_1': { a: 700, b: 760, r: 'PP-ABP', insId: 3, agendado: true } } };
-      importar(e, [pedido(91, 1000, { janela: 'horario', horario: '08:20', recurso: 'C152' })]);
+      importarPedidos(e, [pedido(91, 1000, { janela: 'horario', horario: '08:20', recurso: 'C152' })]);
       assert.deepEqual(Object.fromEntries(Object.keys(editado).map(c => [c, e.stu[0][c]])), editado, `fly ${fly}`);
       assert.deepEqual([e.stu[0].fly, e.stu[0].extra, e.importadas, Object.keys(e.fixos)], [true, [], [91], ['1000_0_1']]);
     }
@@ -247,7 +247,7 @@ describe('Importar as solicitações da agenda para a demanda', () => {
   // desligada, o motor da tela recebe a padrão (estadoDaEscala, comAPrioridadePadrao) e a guardada continua
   it('o voo posto à mão que dá lugar ao pedido fica com a prioridade dele; desligada, o motor recebe a padrão', () => {
     const e = { ...estado(), stu: [aluno(1000, { pr: 5, insId: 2 }), aluno(1001, { pr: 1 })] };
-    const resumo = importar(e, [pedido(96, 1000, { janela: 'horario', horario: '08:20' }), pedido(97, 1001, { missao: 'Navegação', janela: 'horario', horario: '08:20' })]);
+    const resumo = importarPedidos(e, [pedido(96, 1000, { janela: 'horario', horario: '08:20' }), pedido(97, 1001, { missao: 'Navegação', janela: 'horario', horario: '08:20' })]);
     assert.deepEqual([resumo.atualizados, resumo.novos], [1, 1]);
     assert.deepEqual([e.stu[0].solicitacao, e.stu[0].pr, e.stu[0].insId], [96, 5, 2]);
     assert.deepEqual(e.stu[1].extra.map(x => [x.solicitacao, x.pr]), [[97, 3]], 'o pedido que não toma o lugar de ninguém: a padrão');
@@ -258,7 +258,7 @@ describe('Importar as solicitações da agenda para a demanda', () => {
   // O voo que já tem resultado na data aconteceu: o pedido da agenda que tomasse o lugar dele mostraria o resultado dele
   it('o voo que já tem resultado na data também não dá lugar ao pedido da agenda', () => {
     const e = { ...estado(), resultados: { situacao: [], doDia: [{ id: 1, aluno: 1002, curso: 'PP', missao: 'PP-01', resultado: 'aprovado', data: '2026-11-11', voo: '1002_0_1' }] } };
-    importar(e, [pedido(3, 1002)]);
+    importarPedidos(e, [pedido(3, 1002)]);
     assert.deepEqual([e.stu[2].solicitacao, e.stu[2].extra.map(x => [x.mid, x.mis, x.solicitacao])], [undefined, [[1, 'Voo Local', 3]]]);
   });
 
@@ -268,7 +268,7 @@ describe('Importar as solicitações da agenda para a demanda', () => {
   it('o voo fixado pelo status, mesmo sem o cadeado, também não dá lugar ao pedido da agenda', () => {
     const importar = status => {
       const e = { ...estado(), fStatus: { '1002_0_1': status } };
-      importar(e, [pedido(12, 1002)]);
+      importarPedidos(e, [pedido(12, 1002)]);
       return [e.stu[2].solicitacao, e.stu[2].extra.map(x => [x.mid, x.solicitacao])];
     };
     for (const status of ['Em Voo', 'Atrasado', 'Pousou', 'Cancelado']) assert.deepEqual(importar(status), [undefined, [[1, 12]]], status);
@@ -282,7 +282,7 @@ describe('Importar as solicitações da agenda para a demanda', () => {
     const e = cenario({ ins: [instrutor(1, 9)], stu: [aluno(1000, { p1: 610, p2: -1 })] });
     e.fixos = { '1000_0_1': { a: 610, b: 670, r: 'PP-LJV', insId: 1, agendado: true } };
     e.stu.forEach(d => { Object.assign(d, blank()); delete d.insId; d.extra = []; });
-    importar(e, [pedido(8, 1000, { missao: 'Navegação', janela: 'horario', horario: '13:40', horas: 1.5 })]);
+    importarPedidos(e, [pedido(8, 1000, { missao: 'Navegação', janela: 'horario', horario: '13:40', horas: 1.5 })]);
     assert.deepEqual([e.stu[0].fly, e.stu[0].extra.map(x => [x.mid, x.mis, x.solicitacao])], [false, [[1, 'Navegação', 8]]]);
     const { out } = runAllocationEngine(e);
     assert.deepEqual(out.map(v => [v.fKey, v.mis, v.a, Boolean(v.fixo), v.conflito || []]), [['1000_1_1', 'Navegação', 820, false, []]]);
@@ -291,7 +291,7 @@ describe('Importar as solicitações da agenda para a demanda', () => {
       { resultados: { situacao: [], doDia: [{ id: 1, aluno: 1000, curso: 'PP', missao: 'PP-01', resultado: 'reprovado', data: '2026-11-11', voo: '1000_0_1' }] } }];
     for (const sobra of sobras) {
       const comSobra = { ...estado(), ...sobra };
-      importar(comSobra, [pedido(9, 1000)]);
+      importarPedidos(comSobra, [pedido(9, 1000)]);
       assert.deepEqual([comSobra.stu[0].fly, comSobra.stu[0].extra.map(x => [x.mid, x.solicitacao])], [false, [[1, 9]]], JSON.stringify(sobra));
     }
   });
@@ -300,7 +300,7 @@ describe('Importar as solicitações da agenda para a demanda', () => {
   // do curso, o instrutor escolhido)
   it('o pedido principal que recebe o pedido da agenda começa em branco', () => {
     const e = { ...estado(), stu: [aluno(1000, { fly: false, mis: 'Navegação', eq: 'C172', nb: 2, pr: 1, jan: 'h390', etapa: 'PP-09', insId: 1 }, { curso: 'PP' })] };
-    importar(e, [pedido(61, 1000, { janela: 'horario', horario: null })]);
+    importarPedidos(e, [pedido(61, 1000, { janela: 'horario', horario: null })]);
     const p = e.stu[0];
     assert.deepEqual([p.fly, p.mis, p.eq, p.nb, p.pr, p.solicitacao, p.extra], [true, 'Voo Local', 'C152', 1, 3, 61, []]);
     assert.deepEqual(['jan', 'etapa', 'insId'].filter(campo => Object.hasOwn(p, campo)), []);
@@ -312,7 +312,7 @@ describe('Importar as solicitações da agenda para a demanda', () => {
   it('o pedido principal que não voa mas é de outro pedido da agenda não é reaproveitado: o novo vira uma missão extra', () => {
     const antes = { fly: false, mis: 'Navegação', eq: 'C172', nb: 2, pr: 1, jan: 'h500', etapa: 'PP-09', cursoDaEtapa: 'PP', solicitacao: 99, insId: 1 };
     const e = { ...estado(), importadas: [99], stu: [aluno(1000, antes, { curso: 'PP' })] };
-    const resumo = importar(e, [pedido(61, 1000, { janela: 'horario', horario: '10:10' })]);
+    const resumo = importarPedidos(e, [pedido(61, 1000, { janela: 'horario', horario: '10:10' })]);
     assert.deepEqual([resumo.novos, resumo.atualizados], [1, 0]);
     const p = e.stu[0];
     assert.deepEqual(Object.fromEntries(Object.keys(antes).map(c => [c, p[c]])), antes, 'o registro do pedido 99 fica como estava');
@@ -326,11 +326,11 @@ describe('Importar as solicitações da agenda para a demanda', () => {
   it('o voo da mesma missão posto à mão com a missão do curso dá lugar ao pedido da agenda, com a mesma missão do curso', () => {
     const programa = { PP: ['PP-01', 'PP-02'].map(id => ({ id, nome: id, mis: 'Voo Local', eq: 'C152', nb: 1 })) };
     const e = { ...estado(), stu: [aluno(1000, { etapa: 'PP-01', insId: 2 }, { curso: 'PP' })] };
-    const resumo = importar(e, [pedido(62, 1000, { janela: 'horario', horario: '13:40' }), pedido(63, 1000, { janela: 'horario', horario: '15:20' })],
+    const resumo = importarPedidos(e, [pedido(62, 1000, { janela: 'horario', horario: '13:40' }), pedido(63, 1000, { janela: 'horario', horario: '15:20' })],
       { programa: doCadastro(programa) });
     // As 15:20 não estão na lista do C152 (os horários padrão): o minuto fica, e o resumo diz
     assert.deepEqual(resumo, { novos: 1, atualizados: 1, semAluno: 0, deInativo: 0, foraDoPrograma: [], semMissaoDoCurso: [], esperamOsProgramas: 0,
-      foraDaLista: [{ missao: 'Voo Local', recurso: 'C152', horario: '15:20' }], semOHorario: [] });
+      foraDaLista: [{ missao: 'Voo Local', recurso: 'C152', horario: '15:20' }], semOHorario: [], sairam: [], conferir: [] });
     // O instrutor escolhido continua no voo; o segundo pedido é outro voo, a missão seguinte
     assert.deepEqual([e.stu[0].etapa, e.stu[0].solicitacao, e.stu[0].jan, e.stu[0].insId], ['PP-01', 62, 'h820', 2]);
     assert.deepEqual(e.stu[0].extra.map(x => [x.mid, x.etapa, x.solicitacao, x.insId]), [[1, 'PP-02', 63, undefined]]);
@@ -343,7 +343,7 @@ describe('Importar as solicitações da agenda para a demanda', () => {
     const feitas = [...percursoDoCurso(PP).missoes.slice(0, 13).map(m => m.codigo), 'TSL-01'];
     const situacao = feitas.map((codigo, i) => ({ id: i + 1, aluno: 1000, curso: 'PP', missao: codigo, resultado: 'aprovado' }));
     const e = { ...estado(), stu: [aluno(1000, { fly: false }, { curso: 'PP' }), aluno(1001, { fly: false })] };
-    importar(e, [pedido(64, 1000, { missao: 'Noturno', janela: 'horario', horario: '17:30', horas: 3 }), pedido(65, 1001, { missao: 'Ground C152', janela: 'horario', horario: '06:30', horas: 2 })],
+    importarPedidos(e, [pedido(64, 1000, { missao: 'Noturno', janela: 'horario', horario: '17:30', horas: 3 }), pedido(65, 1001, { missao: 'Ground C152', janela: 'horario', horario: '06:30', horas: 2 })],
       { situacao, programa: [PP] });
     const [noturno, ground] = e.stu;
     assert.deepEqual([noturno.mis, noturno.etapa, noturno.eq, noturno.nb, noturno.p1, noturno.p2], ['Noturno', 'NOT', 'C172', 4, 1050, -1]);
@@ -356,7 +356,7 @@ describe('Importar as solicitações da agenda para a demanda', () => {
   it('os pedidos que entram juntos ganham a missão do curso na ordem dos horários', () => {
     const programa = doCadastro({ PP: ['PP-01', 'PP-02'].map(id => ({ id, nome: id, mis: 'Voo Local', eq: 'C152', nb: 1 })) });
     const e = { ...estado(), stu: [aluno(1000, { fly: false }, { curso: 'PP' })] };
-    importar(e, [pedido(70, 1000, { janela: 'horario', horario: '10:10' }), pedido(71, 1000, { janela: 'horario', horario: '08:20' })], { programa });
+    importarPedidos(e, [pedido(70, 1000, { janela: 'horario', horario: '10:10' }), pedido(71, 1000, { janela: 'horario', horario: '08:20' })], { programa });
     const porPedido = Object.fromEntries([e.stu[0], ...e.stu[0].extra].map(p => [p.solicitacao, [p.jan, p.etapa]]));
     assert.deepEqual(porPedido, { 70: ['h610', 'PP-02'], 71: ['h500', 'PP-01'] });
     assert.deepEqual(e.importadas, [71, 70]);
@@ -376,10 +376,10 @@ describe('Importar as solicitações da agenda para a demanda', () => {
     const dia = () => ({ ...estado(), stu: [aluno(1000, { fly: false }, { curso: 'PP' })] });
     const porPedido = e => Object.fromEntries([e.stu[0], ...(e.stu[0].extra || [])].map(p => [p.solicitacao, p.etapa ?? null]));
     const juntos = dia();
-    const resumo = importar(juntos, [escolheu, semUma], { programa, cursos: programa });
+    const resumo = importarPedidos(juntos, [escolheu, semUma], { programa, cursos: programa });
     const emDuas = dia();
-    importar(emDuas, [escolheu], { programa, cursos: programa });
-    importar(emDuas, [escolheu, semUma], { programa, cursos: programa });
+    importarPedidos(emDuas, [escolheu], { programa, cursos: programa });
+    importarPedidos(emDuas, [escolheu, semUma], { programa, cursos: programa });
     // A PP-01 das 14:30 não termina antes das 08:20: a das 08:20 não é a PP-01 (já está no dia) nem a PP-02 (ainda não)
     assert.deepEqual(porPedido(juntos), { 76: 'PP-01', 77: null });
     assert.deepEqual(porPedido(emDuas), porPedido(juntos));
@@ -390,7 +390,7 @@ describe('Importar as solicitações da agenda para a demanda', () => {
     const programa = doCadastro({ PP: ['PP-01', 'PP-02'].map(id => ({ id, nome: id, mis: 'Voo Local', eq: 'C152', nb: 1 })) });
     const importar = p1 => {
       const e = { ...estado(), stu: [aluno(1000, { mis: 'Navegação', eq: 'C152', etapa: 'PP-01', cursoDaEtapa: 'PP', p1, p2: -1 }, { curso: 'PP' })] };
-      const resumo = importar(e, [pedido(72, 1000, { janela: 'horario', horario: '08:20' })], { programa });
+      const resumo = importarPedidos(e, [pedido(72, 1000, { janela: 'horario', horario: '08:20' })], { programa });
       return [e.stu[0].extra.map(x => [x.solicitacao, x.etapa]), resumo.semMissaoDoCurso];
     };
     assert.deepEqual(importar(610), [[[72, undefined]], [{ missao: 'Voo Local' }]], 'a PP-01 às 10:10: a das 08:20 não pode ser a PP-02');
@@ -407,7 +407,7 @@ describe('Importar as solicitações da agenda para a demanda', () => {
     for (const ordem of [[80, 81], [81, 80]]) {
       const linhas = { 80: pedido(80, 1000, { missao: 'Voo Solo', janela: 'horario', horario: '06:30' }), 81: pedido(81, 1000, { janela: 'horario', horario: '08:20', horas: 0.3 }) };
       const e = { ...estado(), stu: [aluno(1000, { fly: false }, { curso: 'PP' })] };
-      importar(e, ordem.map(id => linhas[id]), { situacao, programa: [PP] });
+      importarPedidos(e, ordem.map(id => linhas[id]), { situacao, programa: [PP] });
       const porPedido = Object.fromEntries([e.stu[0], ...e.stu[0].extra].map(p => [p.solicitacao, p.etapa]));
       assert.deepEqual(porPedido, { 80: undefined, 81: 'AVP-SOLO-01' }, ordem.join(','));
     }
@@ -419,13 +419,13 @@ describe('Importar as solicitações da agenda para a demanda', () => {
   it('o horário do pedido que o recurso da missão não tem fica, e o resumo diz', () => {
     const programa = doCadastro({ PP: [], PC: [{ id: 'PC-01', nome: 'A', mis: 'IFR', eq: 'PA-34', nb: 1 }], INVA: [] });
     const e = { ...estado(), stu: [aluno(1000, { fly: false }, { curso: 'PC' }), aluno(1001, { fly: false })] };
-    const resumo = importar(e, [pedido(73, 1000, { missao: 'IFR', janela: 'horario', horario: '08:20', recurso: null }),
+    const resumo = importarPedidos(e, [pedido(73, 1000, { missao: 'IFR', janela: 'horario', horario: '08:20', recurso: null }),
       pedido(74, 1001, { janela: 'horario', horario: '08:20', recurso: 'C152' })], { programa });
     assert.deepEqual([e.stu[0].etapa, e.stu[0].eq, e.stu[0].jan], ['PC-01', 'PA-34', 'h500']);
     assert.deepEqual(resumo.foraDaLista, [{ missao: 'IFR', recurso: 'PA-34', horario: '08:20' }]);
     // A lista do C152 mudada depois do registro, sem as 08:20
     const outra = { ...estado(), horarios: { C152: [610, 700], C172: [500], sim: [500], 'PA-34': [500] }, stu: [aluno(1000, { fly: false })] };
-    const r2 = importar(outra, [pedido(75, 1000, { janela: 'horario', horario: '08:20', recurso: 'C152' })]);
+    const r2 = importarPedidos(outra, [pedido(75, 1000, { janela: 'horario', horario: '08:20', recurso: 'C152' })]);
     assert.deepEqual([outra.stu[0].jan, r2.foraDaLista], ['h500', [{ missao: 'Voo Local', recurso: 'C152', horario: '08:20' }]]);
   });
 
@@ -435,7 +435,7 @@ describe('Importar as solicitações da agenda para a demanda', () => {
   it('o pedido das 06:00, antes do primeiro horário do dia: entra sem o horário exato, e o resumo diz, sem dizer que ele fica', () => {
     for (const lista of [[360, 500, 610], [390, 500, 610]]) {
       const e = { ...estado(), horarios: { C152: lista, C172: [500], sim: [500], 'PA-34': [500] }, stu: [aluno(1000, { fly: false })] };
-      const r = importar(e, [pedido(78, 1000, { janela: 'horario', horario: '06:00', recurso: 'C152' })]);
+      const r = importarPedidos(e, [pedido(78, 1000, { janela: 'horario', horario: '06:00', recurso: 'C152' })]);
       assert.deepEqual([e.stu[0].jan, r.foraDaLista, r.semOHorario], [undefined, [], [{ missao: 'Voo Local', recurso: 'C152', horario: '06:00' }]], String(lista));
     }
   });
@@ -445,7 +445,7 @@ describe('Importar as solicitações da agenda para a demanda', () => {
   // 06:00, e o resumo o conta no mesmo semOHorario (fora dos horários exatos do dia, antes ou depois), não fora da lista
   it('o pedido das 18:00, depois do último horário exato do dia: entra sem ele, e o resumo o conta com o das 06:00', () => {
     const e = { ...estado(), horarios: { C152: [390, 500, 610], C172: [500], sim: [500], 'PA-34': [500] }, stu: [aluno(1000, { fly: false }), aluno(1001, { fly: false })] };
-    const r = importar(e, [pedido(79, 1001, { janela: 'horario', horario: '18:00', recurso: 'C152' }),
+    const r = importarPedidos(e, [pedido(79, 1001, { janela: 'horario', horario: '18:00', recurso: 'C152' }),
       pedido(78, 1000, { janela: 'horario', horario: '06:00', recurso: 'C152' })]);
     assert.deepEqual([e.stu[0].jan, e.stu[1].jan, r.foraDaLista], [undefined, undefined, []]);
     assert.deepEqual(r.semOHorario, [{ missao: 'Voo Local', recurso: 'C152', horario: '06:00' }, { missao: 'Voo Local', recurso: 'C152', horario: '18:00' }]);
@@ -457,9 +457,9 @@ describe('Importar as solicitações da agenda para a demanda', () => {
   it('a linha com um período de antes do J entra sem horário exato, e o resumo não diz nada dela', () => {
     const e = estado();
     const linhas = ['manha', 'tarde', 'noite'].map((janela, i) => pedido(90 + i, 1000 + i, { janela, horario: null, recurso: 'C152' }));
-    const r = importar(e, linhas);
+    const r = importarPedidos(e, linhas);
     const semHorario = estado();
-    importar(semHorario, [pedido(93, 1000, { janela: 'horario', horario: null, recurso: 'C152' })]);
+    importarPedidos(semHorario, [pedido(93, 1000, { janela: 'horario', horario: null, recurso: 'C152' })]);
     const padrao = [semHorario.stu[0].p1, semHorario.stu[0].p2];
     const doPedido = id => e.stu.flatMap(a => [a, ...(a.extra || [])]).find(p => p.solicitacao === id);
     assert.deepEqual([90, 91, 92].map(doPedido).map(p => [p.jan, p.p1, p.p2]), [[undefined, ...padrao], [undefined, ...padrao], [undefined, ...padrao]]);
@@ -472,7 +472,7 @@ describe('Importar as solicitações da agenda para a demanda', () => {
   it('o curso encerrado não dá missão do curso ao pedido que não tem uma', () => {
     const programa = doCadastro({ PP: ['PP-01', 'PP-02'].map(id => ({ id, nome: id, mis: 'Voo Local', eq: 'C152', nb: 1 })) }).map(c => ({ ...c, ativo: false }));
     const e = { ...estado(), stu: [aluno(1000, { fly: false }, { curso: 'PP' }), aluno(1001, { mis: 'Voo Local', etapa: 'PP-02', cursoDaEtapa: 'PP' }, { curso: 'PP' })] };
-    const resumo = importar(e, [pedido(92, 1000, { janela: 'horario', horario: '08:20' }), pedido(93, 1001, { janela: 'horario', horario: '08:20' })], { programa });
+    const resumo = importarPedidos(e, [pedido(92, 1000, { janela: 'horario', horario: '08:20' }), pedido(93, 1001, { janela: 'horario', horario: '08:20' })], { programa });
     assert.deepEqual([e.stu[0].fly, e.stu[0].etapa, e.stu[0].solicitacao], [true, undefined, 92]);
     assert.deepEqual([e.stu[1].etapa, e.stu[1].solicitacao], ['PP-02', 93], 'a do operador fica');
     assert.deepEqual(resumo.semMissaoDoCurso, [], 'nada a inferir num curso encerrado');
@@ -491,7 +491,7 @@ describe('Importar as solicitações da agenda para a demanda', () => {
     const importar = indisponiveis => {
       setS({ stu: [], fStatus: {}, resultados: { situacao: [], doDia: [] }, programa: [cursoPP()], indisponiveis });
       const e = { ...estado(), stu: [aluno(1000, { fly: false }, { curso: 'PP' })] };
-      importar(e, [pedido(66, 1000)], { situacao: [], programa: programaParaInferir() });
+      importarPedidos(e, [pedido(66, 1000)], { situacao: [], programa: programaParaInferir() });
       return e.stu[0].etapa;
     };
     ligarFuncionalidades('progresso');
@@ -505,7 +505,7 @@ describe('Importar as solicitações da agenda para a demanda', () => {
     setS({ stu: [], fStatus: {}, resultados: { situacao: [], doDia: [] }, programa: [cursoPP()] });
     const comEtapa = aluno(1001, { mis: 'Voo Local', eq: 'C152', etapa: 'PP-07', cursoDaEtapa: 'PP' }, { curso: 'PP' });
     const e = { ...estado(), stu: [aluno(1000, { fly: false }, { curso: 'PP' }), comEtapa] };
-    importar(e, [pedido(67, 1000), pedido(68, 1001)], { situacao: [], programa: programaParaInferir() });
+    importarPedidos(e, [pedido(67, 1000), pedido(68, 1001)], { situacao: [], programa: programaParaInferir() });
     assert.equal(e.stu[0].fly, true);
     assert.equal(e.stu[0].etapa, undefined);
     assert.deepEqual([e.stu[1].etapa, e.stu[1].cursoDaEtapa], ['PP-07', 'PP']);
@@ -523,13 +523,13 @@ describe('Importar: o aluno inativo', () => {
       return e;
     };
     const com = estado();
-    const resumo = importar(com, [pedidoDe(1, 1000), pedidoDe(2, 1001)], { semInativos: true });
+    const resumo = importarPedidos(com, [pedidoDe(1, 1000), pedidoDe(2, 1001)], { semInativos: true });
     assert.equal(resumo.novos, 1);
     assert.equal(resumo.deInativo, 1);
     assert.deepEqual(com.importadas, [1]);
     assert.equal(com.stu.find(s => s.id === 1001).fly, false);
     const sem = estado();
-    assert.equal(importar(sem, [pedidoDe(1, 1000), pedidoDe(2, 1001)]).novos, 2);
+    assert.equal(importarPedidos(sem, [pedidoDe(1, 1000), pedidoDe(2, 1001)]).novos, 2);
   });
 });
 
@@ -552,39 +552,39 @@ describe('Importar: a missão do curso do pedido', () => {
     ligarFuncionalidades('');
     setS({ stu: [], fStatus: {}, resultados: { situacao: [], doDia: [] }, programa: [PP] });
     const e = estado([aluno(1000, { fly: false }, { curso: 'PC' })]);
-    const resumo = importar(e, [pedido(1, 1000, { missao_do_curso: idDe('NAV-150NM'), recurso: 'PA-34', horario: '07:30', horas: 2.5 })],
+    const resumo = importarPedidos(e, [pedido(1, 1000, { missao_do_curso: idDe('NAV-150NM'), recurso: 'PA-34', horario: '07:30', horas: 2.5 })],
       { situacao: [], programa: programaParaInferir(), cursos: [PP] });
-    assert.deepEqual(resumo, { novos: 1, atualizados: 0, semAluno: 0, deInativo: 0, foraDoPrograma: [], semMissaoDoCurso: [], esperamOsProgramas: 0, foraDaLista: [], semOHorario: [] });
+    assert.deepEqual(resumo, { novos: 1, atualizados: 0, semAluno: 0, deInativo: 0, foraDoPrograma: [], semMissaoDoCurso: [], esperamOsProgramas: 0, foraDaLista: [], semOHorario: [], sairam: [], conferir: [] });
     const p = e.stu[0];
     assert.deepEqual([p.fly, p.mis, p.etapa, p.cursoDaEtapa, p.eq, p.nb, p.jan, p.p1, p.solicitacao], [true, 'Navegação', 'NAV-150NM', 'PP', 'PA-34', 2.5, 'h450', 450, 1]);
     // O Noturno do curso: as 4 h do dia às 17:30
     const n = estado([aluno(1001, { fly: false }, { curso: 'PP' })]);
-    importar(n, [pedido(2, 1001, { missao: 'Noturno', missao_do_curso: idDe('NOT'), recurso: 'C172', horario: '17:30', horas: 4 })], { cursos: [PP] });
+    importarPedidos(n, [pedido(2, 1001, { missao: 'Noturno', missao_do_curso: idDe('NOT'), recurso: 'C172', horario: '17:30', horas: 4 })], { cursos: [PP] });
     assert.deepEqual([n.stu[0].etapa, n.stu[0].eq, n.stu[0].nb, n.stu[0].p1], ['NOT', 'C172', 4, 1050]);
   });
 
   it('a missão do curso que saiu do programa, ou de outro tipo, não entra: o pedido entra pelo tipo, com o aviso', () => {
     const fora = { ...PP, missoes: PP.missoes.map(m => (m.codigo === 'NAV-150NM' ? { ...m, removida: true } : m.codigo === 'NAV-01' ? { ...m, mis: 'Voo Local' } : m)) };
     const e = estado([aluno(1000, { fly: false }, { curso: 'PP' }), aluno(1001, { fly: false }, { curso: 'PP' }), aluno(1002, { fly: false }, { curso: 'PP' })]);
-    const resumo = importar(e, [pedido(3, 1000, { missao_do_curso: idDe('NAV-150NM') }), pedido(4, 1001, { missao_do_curso: idDe('NAV-01') }),
+    const resumo = importarPedidos(e, [pedido(3, 1000, { missao_do_curso: idDe('NAV-150NM') }), pedido(4, 1001, { missao_do_curso: idDe('NAV-01') }),
       pedido(5, 1002, { missao_do_curso: '00000000-0000-4000-8000-000000000999' })], { cursos: [fora] });
     assert.deepEqual(resumo.foraDoPrograma, [{ missao: 'Navegação', entrouComo: null }, { missao: 'Navegação', entrouComo: null }, { missao: 'Navegação', entrouComo: null }]);
     assert.deepEqual(e.stu.map(s => [s.fly, s.mis, s.etapa, s.eq, s.nb]), [[true, 'Navegação', undefined, 'C152', 3], [true, 'Navegação', undefined, 'C152', 3], [true, 'Navegação', undefined, 'C152', 3]]);
     // Os programas lidos sem nenhum curso: a missão do curso não existe mais
     const semCursos = estado([aluno(1000, { fly: false }, { curso: 'PP' })]);
-    assert.deepEqual(importar(semCursos, [pedido(6, 1000, { missao_do_curso: idDe('NAV-150NM') })], { cursos: [] }).foraDoPrograma, [{ missao: 'Navegação', entrouComo: null }]);
+    assert.deepEqual(importarPedidos(semCursos, [pedido(6, 1000, { missao_do_curso: idDe('NAV-150NM') })], { cursos: [] }).foraDoPrograma, [{ missao: 'Navegação', entrouComo: null }]);
   });
 
   // Os programas não lidos (cursos: null) não dizem se a missão do curso saiu: o pedido que tem uma espera, fora de
   // importadas, e entra com ela na importação depois de lidos; o que não tem nenhuma entra como antes
   it('sem os programas lidos (cursos: null), o pedido com a missão do curso espera e não conta como visto', () => {
     const e = estado([aluno(1000, { fly: false }, { curso: 'PP' }), aluno(1001, { fly: false })]);
-    const resumo = importar(e, [pedido(16, 1000, { missao_do_curso: idDe('NAV-150NM') }), pedido(17, 1001)], { cursos: null });
-    assert.deepEqual(resumo, { novos: 1, atualizados: 0, semAluno: 0, deInativo: 0, foraDoPrograma: [], semMissaoDoCurso: [], esperamOsProgramas: 1, foraDaLista: [], semOHorario: [] });
+    const resumo = importarPedidos(e, [pedido(16, 1000, { missao_do_curso: idDe('NAV-150NM') }), pedido(17, 1001)], { cursos: null });
+    assert.deepEqual(resumo, { novos: 1, atualizados: 0, semAluno: 0, deInativo: 0, foraDoPrograma: [], semMissaoDoCurso: [], esperamOsProgramas: 1, foraDaLista: [], semOHorario: [], sairam: [], conferir: [] });
     assert.deepEqual(e.importadas, [17]);
     assert.deepEqual([e.stu[0].fly, e.stu[1].fly], [false, true]);
     // Lidos, ele entra com a missão do curso dele
-    assert.equal(importar(e, [pedido(16, 1000, { missao_do_curso: idDe('NAV-150NM') })], { cursos: [PP] }).novos, 1);
+    assert.equal(importarPedidos(e, [pedido(16, 1000, { missao_do_curso: idDe('NAV-150NM') })], { cursos: [PP] }).novos, 1);
     assert.deepEqual([e.stu[0].fly, e.stu[0].etapa, e.stu[0].cursoDaEtapa, e.importadas], [true, 'NAV-150NM', 'PP', [17, 16]]);
   });
 
@@ -593,7 +593,7 @@ describe('Importar: a missão do curso do pedido', () => {
   it('a missão do curso que saiu do programa, com o progresso ligado: o resumo diz a missão inferida no lugar dela', () => {
     const fora = { ...PP, missoes: PP.missoes.map(m => (m.codigo === 'IN-01' ? { ...m, removida: true } : m)) };
     const e = estado([aluno(1000, { fly: false }, { curso: 'PP' })]);
-    const resumo = importar(e, [pedido(18, 1000, { missao: 'Voo Local', missao_do_curso: idDe('IN-01'), horas: 1 })], { situacao: [], programa: [fora], cursos: [fora] });
+    const resumo = importarPedidos(e, [pedido(18, 1000, { missao: 'Voo Local', missao_do_curso: idDe('IN-01'), horas: 1 })], { situacao: [], programa: [fora], cursos: [fora] });
     assert.deepEqual(resumo.foraDoPrograma, [{ missao: 'Voo Local', entrouComo: e.stu[0].etapa }]);
     assert.ok(/^IN-/.test(e.stu[0].etapa), e.stu[0].etapa);
   });
@@ -605,7 +605,7 @@ describe('Importar: a missão do curso do pedido', () => {
       setS({ stu: [], fStatus: {}, resultados: { situacao, doDia: [] }, programa: [PP] });
       const importar = extra => {
         const e = estado([aluno(1000, { fly: false }, { curso: 'PP' }), aluno(1001, { mis: 'Navegação', eq: 'C172', nb: 2, etapa: 'NAV-02', cursoDaEtapa: 'PP' }, { curso: 'PP' })]);
-        const resumo = importar(e, [pedido(7, 1000, extra), pedido(8, 1001, { recurso: 'PA-34', ...extra })], { situacao, programa: programaParaInferir(), cursos: [PP] });
+        const resumo = importarPedidos(e, [pedido(7, 1000, extra), pedido(8, 1001, { recurso: 'PA-34', ...extra })], { situacao, programa: programaParaInferir(), cursos: [PP] });
         return { resumo, e };
       };
       const sem = importar({}), nulo = importar({ missao_do_curso: null });
@@ -616,30 +616,30 @@ describe('Importar: a missão do curso do pedido', () => {
 
   it('o voo posto à mão da mesma missão: dá lugar ao pedido da mesma missão do curso, ou ao que só o pedido tem; com outra, são dois voos', () => {
     const mesma = estado([aluno(1000, { mis: 'Navegação', eq: 'C172', nb: 1.5, etapa: 'NAV-150NM', cursoDaEtapa: 'PP', insId: 2 }, { curso: 'PP' })]);
-    assert.equal(importar(mesma, [pedido(9, 1000, { missao_do_curso: idDe('NAV-150NM') })], { cursos: [PP] }).atualizados, 1);
+    assert.equal(importarPedidos(mesma, [pedido(9, 1000, { missao_do_curso: idDe('NAV-150NM') })], { cursos: [PP] }).atualizados, 1);
     assert.deepEqual([mesma.stu[0].etapa, mesma.stu[0].eq, mesma.stu[0].nb, mesma.stu[0].insId, mesma.stu[0].solicitacao, mesma.stu[0].extra], ['NAV-150NM', 'C152', 3, 2, 9, []]);
     // Uma NAV-01 posta à mão e um pedido da NAV-150NM: dois voos, cada um com a sua
     const outra = estado([aluno(1000, { mis: 'Navegação', eq: 'C152', nb: 1.5, etapa: 'NAV-01', cursoDaEtapa: 'PP' }, { curso: 'PP' })]);
-    assert.equal(importar(outra, [pedido(10, 1000, { missao_do_curso: idDe('NAV-150NM') })], { cursos: [PP] }).novos, 1);
+    assert.equal(importarPedidos(outra, [pedido(10, 1000, { missao_do_curso: idDe('NAV-150NM') })], { cursos: [PP] }).novos, 1);
     assert.deepEqual([outra.stu[0], ...outra.stu[0].extra].map(p => [p.etapa, p.nb, p.solicitacao]), [['NAV-01', 1.5, undefined], ['NAV-150NM', 3, 10]]);
     // O voo posto à mão sem missão do curso dá lugar e fica com a do pedido
     const semEtapa = estado([aluno(1000, { mis: 'Navegação', eq: 'C172', nb: 2 }, { curso: 'PP' })]);
-    assert.equal(importar(semEtapa, [pedido(11, 1000, { missao_do_curso: idDe('NAV-150NM') })], { cursos: [PP] }).atualizados, 1);
+    assert.equal(importarPedidos(semEtapa, [pedido(11, 1000, { missao_do_curso: idDe('NAV-150NM') })], { cursos: [PP] }).atualizados, 1);
     assert.deepEqual([semEtapa.stu[0].etapa, semEtapa.stu[0].cursoDaEtapa, semEtapa.stu[0].eq, semEtapa.stu[0].extra], ['NAV-150NM', 'PP', 'C152', []]);
     // O voo com a missão do curso posta à mão e o pedido sem nenhuma: o voo dá lugar e fica com a do operador, como antes
     const soNoVoo = estado([aluno(1000, { mis: 'Navegação', eq: 'C172', nb: 2, etapa: 'NAV-02', cursoDaEtapa: 'PP' }, { curso: 'PP' })]);
-    importar(soNoVoo, [pedido(12, 1000, { recurso: 'PA-34', horas: 1.2 })], { cursos: [PP] });
+    importarPedidos(soNoVoo, [pedido(12, 1000, { recurso: 'PA-34', horas: 1.2 })], { cursos: [PP] });
     assert.deepEqual([soNoVoo.stu[0].etapa, soNoVoo.stu[0].eq, soNoVoo.stu[0].nb, soNoVoo.stu[0].solicitacao], ['NAV-02', 'C172', 1.2, 12]);
   });
 
   it('o pedido sem missão do curso para o qual nenhuma é inferida diz por quê (só quando há o que inferir)', () => {
     const situacao = percursoDoCurso(PP).missoes.slice(0, 13).map((m, i) => ({ id: i + 1, aluno: 1000, curso: 'PP', missao: m.codigo, resultado: 'aprovado' }));
     const e = estado([aluno(1000, { fly: false }, { curso: 'PP' }), aluno(1001, { fly: false })]);
-    const resumo = importar(e, [pedido(13, 1000, { recurso: 'PA-34' }), pedido(14, 1001, { recurso: 'PA-34' })], { situacao, programa: [PP], cursos: [PP] });
+    const resumo = importarPedidos(e, [pedido(13, 1000, { recurso: 'PA-34' }), pedido(14, 1001, { recurso: 'PA-34' })], { situacao, programa: [PP], cursos: [PP] });
     assert.deepEqual(resumo.semMissaoDoCurso, [{ missao: 'Navegação', recurso: 'PA-34' }]);
     // Com o progresso desligado (nenhum programa para inferir), nada é dito
     const desligado = estado([aluno(1000, { fly: false }, { curso: 'PP' })]);
-    assert.deepEqual(importar(desligado, [pedido(15, 1000, { recurso: 'PA-34' })], { situacao, programa: [], cursos: [PP] }).semMissaoDoCurso, []);
+    assert.deepEqual(importarPedidos(desligado, [pedido(15, 1000, { recurso: 'PA-34' })], { situacao, programa: [], cursos: [PP] }).semMissaoDoCurso, []);
   });
 });
 
