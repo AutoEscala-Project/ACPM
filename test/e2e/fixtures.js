@@ -15,7 +15,7 @@ export * from './telas/invariantes.js';
 export * from './telas/recursos.js';
 export * from './telas/instrutores.js';
 export * from './telas/alunos.js';
-export * from './telas/demanda.js';
+export * from './telas/processamento.js';
 export * from './telas/pedidos.js';
 export * from './telas/escala.js';
 export * from './telas/cursos.js';
