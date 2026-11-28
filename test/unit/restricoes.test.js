@@ -84,6 +84,11 @@ describe('horarioExatoDoPedido: o horário do pedido da agenda (N14)', () => {
     assert.equal(horarioExatoDoPedido({}), null);
     assert.equal(horarioExatoDoPedido({ jan: 'manha' }), null);
   });
+
+  it('os dois horários exatos do E (U1): o da 1ª e o da 2ª preferência, na ordem do pedido, não na do relógio', () => {
+    assert.deepEqual(horarioExatoDoPedido({ jan: 'h500|h390' }), { minutos: [500, 390], texto: 'às 08:20 ou às 06:30' });
+    assert.equal(horarioExatoDoPedido({ jan: 'h500|h500' }), null);
+  });
 });
 
 describe('opcoesDeTipoDoPedido: os tipos da missão, com o das limitações dito (L)', () => {
@@ -130,6 +135,17 @@ describe('opcoesDeHorarioDoPedido: as preferências, com o horário fora das lim
     const lim = aluno(1000, {}, { limitacoes: { horarios: [{ de: 780, ate: 1080, dias: [1] }] } });
     assert.equal(opcoesDeHorarioDoPedido(lim, {}, -1, lista, SEGUNDA).find(o => o.valor === 820).motivo, null);
     assert.equal(opcoesDeHorarioDoPedido(lim, {}, -1, lista, '2026-12-01').find(o => o.valor === 820).motivo, 'o aluno não voa nesta data');
+  });
+
+  it('o horário guardado das 06:00 (antes da decisão de 28/11, L): lido como das 06:30, como o motor o lê; o que termina até as 06:30 sai', () => {
+    const cedo = aluno(1000, {}, { limitacoes: { horarios: [{ de: 360, ate: 600 }] } });
+    const opcoes = opcoesDeHorarioDoPedido(cedo, {}, -1, lista, SEGUNDA);
+    assert.equal(opcoes.find(o => o.valor === 390).motivo, null);
+    assert.equal(opcoes.find(o => o.valor === 820).motivo, 'o aluno só voa das 06:30 às 10:00');
+    assert.equal(avisoDaRestricao(cedo, 'p1', 820, SEGUNDA), '13:40: o aluno só voa das 06:30 às 10:00. Assim, o app não escala o pedido nesse horário; só um voo posto à mão, no editor do voo, voa assim.');
+    const antesDas0630 = aluno(1000, {}, { limitacoes: { horarios: [{ de: 360, ate: 390 }] } });
+    assert.ok(opcoesDeHorarioDoPedido(antesDas0630, {}, -1, lista, SEGUNDA).every(o => o.motivo === null));
+    assert.equal(avisoDaRestricao(antesDas0630, 'p1', 820, SEGUNDA), null);
   });
 });
 
