@@ -1,15 +1,15 @@
-// Horários de decolagem na aba Recursos. Cada categoria mostra um resumo (o modelo, quantos horários e os horários da
-// manhã e da tarde, com o fechado nesta data riscado) e um botão "Editar". O editor abre na própria linha,
-// com uma cópia da lista (o rascunho): o modelo, os horários com ✕, um campo em que Enter põe o horário e o efeito nos
-// pedidos antes de salvar. Nada muda até "Salvar" (js/eventos/recursos.js); "Cancelar" e Esc descartam.
+// Horários de decolagem de uma categoria, no detalhe dela em Recursos (B: o cabeçalho da categoria na lista abre o
+// detalhe; js/views/recursos.js põe o lugar #horarios[data-cat], sempre com o mesmo HTML, e este módulo o preenche). A
+// categoria mostra um resumo (o modelo, quantos horários e os horários da manhã e da tarde, com o fechado nesta data
+// riscado) e um botão "Editar". O editor abre no lugar do resumo, com uma cópia da lista (o rascunho): o modelo, os
+// horários com ✕, um campo em que Enter põe o horário e o efeito nos pedidos antes de salvar. Nada muda até "Salvar"
+// (js/eventos/recursos.js); "Cancelar" e Esc descartam. O rascunho fica ao escolher outro registro da lista (o cabeçalho
+// da categoria diz "edição aberta"), e volta, com o horário digitado, quando a categoria é escolhida de novo.
 //
 // O editor é desenhado ao abrir. Cada mudança no rascunho atualiza só os horários, o modelo marcado, o efeito e o erro:
 // o foco fica onde está, e o efeito (aria-live) e o erro (role="alert") continuam os mesmos elementos, para o leitor de
-// tela anunciar o texto novo. Quando a aba é redesenhada por outra alteração, o foco volta ao elemento equivalente.
-//
-// Os filtros de Recursos valem aqui por categoria (js/views/filtros-dos-recursos.js): aparecem as categorias marcadas e,
-// com a busca, as dos recursos achados. A categoria do editor aberto, ou fechado agora (o foco volta ao "Editar" dela),
-// continua à vista até os filtros mudarem.
+// tela anunciar o texto novo. O lugar só é desenhado de novo quando o que ele mostra muda (ou quando o componente o pôs
+// de novo, vazio); o foco volta então ao elemento equivalente.
 
 import { S } from '../state.js';
 import { $ } from '../dom.js';
@@ -17,16 +17,16 @@ import { doNomeDaCategoria } from '../categorias.js';
 import { hm, esc } from '../format.js';
 import { CATEGORIAS_COM_HORARIOS, HORARIOS_PADRAO, DE_30_EM_30, PRIMEIRO_HORARIO, ULTIMO_HORARIO, paraMinuto, modeloDosHorarios, descreverHorarios, porPeriodo, impactoDosHorarios, resumoDoImpacto } from '../horarios.js';
 import { fechamentosDoEstado, fechamentoDoMinuto } from '../fechamentos.js';
-import { horariosAVista, manterHorariosAVista } from './filtros-dos-recursos.js';
 
 const NOMES_DAS_CATEGORIAS = { C152: 'C152', C172: 'C172', sim: 'Simulador', 'PA-34': 'PA-34', ground: 'Sala Ground' };
 const MODELOS = [['padrao', 'Horários padrão'], ['de30', 'De 30 em 30 min'], ['personalizado', 'Personalizado']];
 const PERIODOS = [['manha', 'Manhã'], ['tarde', 'Tarde']];
 const ID_DO_ERRO = 'hr-erro', ID_DA_DICA = 'hr-dica';
 
-// O rascunho do editor aberto: { cat, lista, base, erro, erroDoCampo }, ou null. base: a lista da categoria quando o
-// editor abriu (Salvar só grava enquanto ela é a da categoria: js/eventos/recursos.js). erroDoCampo: o erro é do horário
-// digitado (o campo fica marcado como inválido); o de tirar o último horário não é
+// O rascunho do editor aberto: { cat, lista, base, erro, erroDoCampo, digitado }, ou null. base: a lista da categoria
+// quando o editor abriu (Salvar só grava enquanto ela é a da categoria: js/eventos/recursos.js). erroDoCampo: o erro é do
+// horário digitado (o campo fica marcado como inválido); o de tirar o último horário não é. digitado: o horário que está
+// no campo e ainda não foi posto (volta com o editor desenhado de novo)
 let rascunho = null;
 // A última escrita pedida no alerta: uma escrita adiada que ficou para trás não é feita
 let escritasNoAlerta = 0;
@@ -110,35 +110,53 @@ function seletorDoFoco() {
   return null;
 }
 
-export function rHorarios() {
+// O que o lugar mostra agora: um desenho igual ao que está nele não é refeito (no editor, só o efeito acompanha a data)
+const chaveDoDesenho = cat => (rascunho && rascunho.cat === cat ? `${cat}|editor`
+  : `${cat}|${listaDe(cat).join(',')}|${listaDe(cat).filter(m => fechadoNaData(m, cat)).join(',')}`);
+
+// Desenha os horários da categoria do lugar #horarios (o detalhe da categoria aberto), se o que ele mostra mudou.
+// forcar: desenha de novo (o editor que abriu ou fechou)
+export function rHorarios({ forcar = false } = {}) {
   const caixa = $('#horarios');
-  if (!caixa) return;
+  if (!caixa || !CATEGORIAS_COM_HORARIOS.includes(caixa.dataset.cat)) return;
+  const cat = caixa.dataset.cat;
+  const chave = chaveDoDesenho(cat);
+  if (!forcar && caixa.dataset.desenho === chave) {
+    // O editor continua como está; o efeito é o dos pedidos da data aberta (outra data, a releitura): só ele é refeito
+    const efeito = rascunho && rascunho.cat === cat && caixa.querySelector('.horarios-efeito');
+    if (efeito) { const texto = efeitoDoRascunho(); if (efeito.textContent !== texto) efeito.textContent = texto; }
+    return;
+  }
   const foco = seletorDoFoco();
-  // O horário digitado (e ainda não posto) continua no campo, se o editor redesenhado é o da mesma categoria
-  const aberto = caixa.querySelector('.horarios-cat.editando');
-  const digitado = aberto && rascunho && aberto.dataset.cat === rascunho.cat ? aberto.querySelector('.hr-novo').value : '';
-  const aVista = CATEGORIAS_COM_HORARIOS.filter(cat => (rascunho && rascunho.cat === cat) || horariosAVista(cat));
-  caixa.innerHTML = aVista.map(cat => {
-    const editando = Boolean(rascunho) && rascunho.cat === cat;
-    return `<div class="horarios-cat${editando ? ' editando' : ''}" data-cat="${cat}">${editando ? editor(cat) : resumo(cat)}</div>`;
-  }).join('') || '<p class="h sem-resultado">Nenhuma categoria com esses filtros.</p>';
+  const editando = Boolean(rascunho) && rascunho.cat === cat;
+  caixa.innerHTML = `<div class="horarios-cat${editando ? ' editando' : ''}" data-cat="${cat}">${editando ? editor(cat) : resumo(cat)}</div>`;
+  caixa.dataset.desenho = chave;
   const campo = caixa.querySelector('.hr-novo');
-  if (campo) campo.value = digitado;
+  if (campo) campo.value = campo.defaultValue = rascunho.digitado || '';
   const alvo = foco && caixa.querySelector(foco);
   if (alvo) alvo.focus();
+}
+
+// O horário digitado no campo do editor (o rascunho guarda; o valor de partida do campo acompanha, para o componente da
+// lista não refazer a seção por causa dele)
+export function digitouNoRascunho(campo) {
+  if (!rascunho) return;
+  rascunho = { ...rascunho, digitado: campo.value };
+  campo.defaultValue = campo.value;
 }
 
 // O rascunho mudou: só os horários, o modelo marcado, o efeito e o erro. O foco num ✕ que saiu vai para o horário
 // seguinte (ou o anterior; sem nenhum, para o campo), para tirar vários em sequência pelo teclado
 function atualizarEditor() {
   const caixa = document.querySelector('#horarios .horarios-editor');
-  if (!caixa) { rHorarios(); return; }
+  if (!caixa) { rHorarios({ forcar: true }); return; }
   const { lista, erro, erroDoCampo } = rascunho;
   const ativo = document.activeElement;
   const minutoComFoco = ativo && caixa.contains(ativo) && ativo.dataset.act === 'rascunho-tirar' ? +ativo.dataset.min : null;
   caixa.querySelector('.horarios-periodos').outerHTML = periodos(lista, horarioNoEditor);
   const modelo = modeloDosHorarios(lista);
-  caixa.querySelectorAll('input[name="hr-modelo"]').forEach(r => { r.checked = r.value === modelo; });
+  // (o valor de partida das caixas acompanha: o componente da lista não refaz a seção por causa delas)
+  caixa.querySelectorAll('input[name="hr-modelo"]').forEach(r => { r.checked = r.defaultChecked = r.value === modelo; });
   caixa.querySelector('.hr-novo').setAttribute('aria-invalid', String(Boolean(erro && erroDoCampo)));
   // O alerta é esvaziado e escrito no quadro seguinte: o mesmo erro de novo também é anunciado
   const alerta = caixa.querySelector(`#${ID_DO_ERRO}`);
@@ -158,19 +176,18 @@ function atualizarEditor() {
 
 export function abrirEditorDosHorarios(cat) {
   if (!CATEGORIAS_COM_HORARIOS.includes(cat)) return;
-  rascunho = { cat, lista: [...listaDe(cat)], base: [...listaDe(cat)], erro: '', erroDoCampo: false };
-  rHorarios();
-  $('#horarios .hr-novo').focus();
+  rascunho = { cat, lista: [...listaDe(cat)], base: [...listaDe(cat)], erro: '', erroDoCampo: false, digitado: '' };
+  rHorarios({ forcar: true });
+  const campo = $('#horarios .hr-novo');
+  if (campo) campo.focus();
 }
 
-// Fecha o editor (salvo ou descartado) e devolve o foco ao "Editar" da categoria, que continua à vista mesmo fora dos
-// filtros (até eles mudarem)
+// Fecha o editor (salvo ou descartado) e devolve o foco ao "Editar" da categoria
 export function fecharEditorDosHorarios() {
   if (!rascunho) return;
   const { cat } = rascunho;
   rascunho = null;
-  manterHorariosAVista(cat);
-  rHorarios();
+  rHorarios({ forcar: true });
   const botao = document.querySelector(`#horarios [data-act="editar-horarios"][data-cat="${cat}"]`);
   if (botao) botao.focus();
 }
@@ -196,6 +213,7 @@ export function porNoRascunho() {
   } else {
     mudar([...new Set([...rascunho.lista, minuto])].sort((a, b) => a - b));
     campo.value = '';
+    digitouNoRascunho(campo);
   }
   if (campo) campo.focus();
 }

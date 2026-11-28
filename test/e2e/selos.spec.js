@@ -1,7 +1,7 @@
 // O que pede atenção, na linha (os antigos selos das abas): o estado e o valor de cada cartão e das tarefas dele (os avisos
 // e as missões que não entraram na Escala, os pedidos que ainda não estão na demanda, na Agenda) e o selo do link Recursos
 // (aviões parados ou perto da revisão de 50 horas), que aparece também no botão da Disponibilidade do dia
-import { test, expect, abrir, irPara, irParaVista, AMANHA, entrar, botaoDaAba, botaoImportarDaAgenda, caixaVoa, importarDaAgenda, tabelaDoDia } from './fixtures.js';
+import { test, expect, abrir, irPara, AMANHA, entrar, botaoDaAba, botaoImportarDaAgenda, caixaVoa, importarDaAgenda, abrirRecursos, abrirRecurso, linhaDoRecurso } from './fixtures.js';
 import { aluno, cenario, instrutor } from '../helpers/montar.js';
 import { instalarSupabaseFalso, documentosAtuais, CONTAS } from './supabase-falso.js';
 import { estadoSintetico } from '../helpers/estado.js';
@@ -37,24 +37,23 @@ test.describe('O que pede atenção, na linha', () => {
 
   // A tabela dos aviões fica na Disponibilidade do dia: o selo do link Recursos diz quantos, e aparece também no botão dela
   // (quem está no Cadastro vê onde olhar)
-  test('Recursos: aviões parados ou com menos de 5 h até a revisão de 50 horas, também no botão da Disponibilidade do dia', async ({ page }) => {
+  // B: o número da Disponibilidade do dia vai para os pontos das linhas de Recursos (e o trilho)
+  test('Recursos: aviões parados ou com menos de 5 h até a revisão de 50 horas, também no ponto da linha do avião', async ({ page }) => {
     await abrir(page, { estado: cenario({ horas: { 'PR-BTB': 47, 'PR-IGU': 10 } }) });
     await expect(seloDeRecursos(page)).toHaveText('1');
     await expect(seloDeRecursos(page)).toHaveClass(/\batencao\b/);
     await expect(botaoDaAba(page, 'rec')).toHaveAccessibleName(/^Recursos ?, 1 avião parado ou perto da revisão de 50 horas$/);
     await expect(tarefa(page, 'recursos')).toHaveAttribute('data-estado', 'atencao');
-    await irParaVista(page, 'rec', 'cadastro');
-    const doDia = page.locator('#s-rec [data-vista-rec="dia"] #selo-rec-dia');
-    await expect(doDia).toBeVisible();
-    await expect(doDia).toHaveText('1');
-    await expect(doDia).toHaveClass(/\baviso\b/);
-    await expect(doDia).toHaveAttribute('title', '1 avião parado ou perto da revisão de 50 horas');
+    await abrirRecursos(page);
+    const ponto = linhaDoRecurso(page, 'PR-BTB').locator('.lista-ponto.aviso');
+    await expect(ponto).toHaveAttribute('title', 'perto da revisão de 50 horas');
+    await expect(linhaDoRecurso(page, 'PR-IGU').locator('.lista-ponto.aviso, .lista-ponto.erro')).toHaveCount(0);
     // A revisão feita: os dois somem
-    await irParaVista(page, 'rec', 'dia');
-    await tabelaDoDia(page).locator('tr[data-r="PR-BTB"] [data-act="revisao"]').click();
-    await tabelaDoDia(page).locator('tr[data-r="PR-BTB"] [data-act="revisao"]').click();
+    await abrirRecurso(page, 'PR-BTB');
+    await page.locator('#det-rec [data-act="revisao"]').click();
+    await page.locator('#det-rec [data-act="revisao"]').click();
     await expect(seloDeRecursos(page)).toBeHidden();
-    await expect(doDia).toBeHidden();
+    await expect(ponto).toHaveCount(0);
     await expect(tarefa(page, 'recursos')).toHaveAttribute('data-estado', 'feito');
   });
 
